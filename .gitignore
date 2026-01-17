@@ -11,9 +11,6 @@ __pycache__/
 # Trained models
 *.h5
 
-# MediaPipe model files
-*.task
-
 # OS files
 .DS_Store
 Thumbs.db
