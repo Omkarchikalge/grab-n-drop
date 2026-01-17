@@ -77,16 +77,9 @@ while True:
             conf = probs[idx]
 
             if conf > CONF_THRESHOLD:
-                label = LABELS[idx].upper()
-                cv2.putText(
-                    frame,
-                    f"{label} ({conf:.2f})",
-                    (30, 60),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    1.2,
-                    (0, 255, 0),
-                    3
-                )
+                print(LABELS[idx].upper(), flush=True)
+            else:
+                print("NONE", flush=True)
 
     cv2.imshow("Grab-Drop Live", frame)
     if cv2.waitKey(1) & 0xFF == 27:
