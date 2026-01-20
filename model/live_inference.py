@@ -3,6 +3,8 @@ import numpy as np
 from collections import deque
 from tensorflow.keras.models import load_model
 import time
+import websocket
+import json
 
 from mediapipe import Image, ImageFormat
 from mediapipe.tasks.python import BaseOptions
@@ -14,11 +16,19 @@ from mediapipe.tasks.python.vision import (
 
 # ================= CONFIG =================
 WINDOW_SIZE = 30
-CONF_THRESHOLD = 0.8
-LABELS = ["drop", "grab"]
+LABELS = ["grab", "drop"]
+
+GRAB_CONF = 0.55
+DROP_CONF = 0.75
+
+GRAB_OPEN_MAX = 0.35   # closed hand
+DROP_OPEN_MIN = 0.40   # open hand
+
 gesture_state = "IDLE"  # IDLE -> HOLDING
 last_gesture_time = 0
-COOLDOWN_TIME = 1.2
+COOLDOWN_TIME = 1.0
+
+ROOM_ID = "demo-room"
 
 # ================= LOAD MODEL =================
 model = load_model("gesture_model.h5")
@@ -43,24 +53,38 @@ def normalize_landmarks(raw):
         landmarks /= scale
     return landmarks.flatten()
 
+def hand_openness(landmarks):
+    wrist = landmarks[0]
+    wrist_xyz = np.array([wrist.x, wrist.y, wrist.z])
+
+    tips = [4, 8, 12, 16, 20]
+    distances = []
+
+    for i in tips:
+        tip = landmarks[i]
+        tip_xyz = np.array([tip.x, tip.y, tip.z])
+        distances.append(np.linalg.norm(tip_xyz - wrist_xyz))
+
+    return np.mean(distances)
+
 # ================= CAMERA =================
 cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 timestamp_ms = 0
 
 print("Live inference started — press ESC to exit")
 
-def hand_openness(landmarks):
-    # Average distance of fingertips from wrist
-    wrist = landmarks[0]
-    tips = [4, 8, 12, 16, 20]
+# ================= WEBSOCKET =================
+ws = websocket.WebSocket()
+ws.connect("ws://localhost:3000")
 
-    dists = [
-        np.linalg.norm(np.array(landmarks[i]) - np.array(wrist))
-        for i in tips
-    ]
-    return np.mean(dists)
+print("Connected to WebSocket server")
 
+ws.send(json.dumps({
+    "type": "join-room",
+    "roomId": ROOM_ID
+}))
 
+# ================= MAIN LOOP =================
 while True:
     ret, frame = cap.read()
     if not ret:
@@ -79,12 +103,13 @@ while True:
 
     if result.hand_landmarks:
         hand = result.hand_landmarks[0]
+
         raw = []
         for lm in hand:
             raw.extend([lm.x, lm.y, lm.z])
 
         sequence.append(normalize_landmarks(raw))
-
+        openness = hand_openness(hand)
         current_time = time.time()
 
         if len(sequence) == WINDOW_SIZE:
@@ -93,20 +118,50 @@ while True:
 
             idx = np.argmax(probs)
             conf = probs[idx]
+            predicted = LABELS[idx].upper()
 
-            if conf > CONF_THRESHOLD and (current_time - last_gesture_time) > COOLDOWN_TIME:
-                predicted = LABELS[idx].upper()
+            # print(
+            #     f"{predicted} | conf={conf:.2f} | open={openness:.2f} | state={gesture_state}",
+            #     flush=True
+            # )
 
-                if predicted == "GRAB" and gesture_state == "IDLE":
-                    print("GRAB", flush=True)
+            if (current_time - last_gesture_time) > COOLDOWN_TIME:
+
+                # -------- GRAB --------
+                if (
+                    predicted == "GRAB"
+                    and gesture_state == "IDLE"
+                    and conf > GRAB_CONF
+                    and openness < GRAB_OPEN_MAX
+                    ):
                     gesture_state = "HOLDING"
                     last_gesture_time = current_time
 
-                elif predicted == "DROP" and gesture_state == "HOLDING":
-                    print("DROP", flush=True)
+                    print("GRAB", flush=True)
+
+                    ws.send(json.dumps({
+                        "type": "gesture",
+                        "roomId": ROOM_ID,
+                        "value": "GRAB"
+                    }))
+
+# -------- DROP --------
+                elif (
+                    predicted == "DROP"
+                    and gesture_state == "HOLDING"
+                    and conf > DROP_CONF
+                    and openness > DROP_OPEN_MIN
+                ):
                     gesture_state = "IDLE"
                     last_gesture_time = current_time
 
+                    print("DROP", flush=True)
+
+                    ws.send(json.dumps({
+                        "type": "gesture",
+                        "roomId": ROOM_ID,
+                        "value": "DROP"
+                    }))
 
     cv2.imshow("Grab-Drop Live", frame)
     if cv2.waitKey(1) & 0xFF == 27:

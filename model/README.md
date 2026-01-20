@@ -97,6 +97,9 @@ or
 
 4. Backend controls what GRAB/DROP means
 
+hand_landmarker.task is MediaPipe’s pre-trained hand detection + landmark model
+
+
 ## 🧪 How to test gestures manually
 
 Run python live_inference.py
