@@ -15,6 +15,8 @@ from mediapipe.tasks.python.vision import (
 )
 
 # ================= CONFIG =================
+WS_SERVER_URL = "ws://192.168.0.162:3000"
+
 WINDOW_SIZE = 30
 LABELS = ["grab", "drop"]
 
@@ -27,6 +29,8 @@ DROP_OPEN_MIN = 0.40   # open hand
 gesture_state = "IDLE"  # IDLE -> HOLDING
 last_gesture_time = 0
 COOLDOWN_TIME = 1.0
+
+
 
 ROOM_ID = "demo-room"
 
@@ -75,8 +79,8 @@ print("Live inference started — press ESC to exit")
 
 # ================= WEBSOCKET =================
 ws = websocket.WebSocket()
-ws.connect("ws://localhost:3000")
-
+ws.connect(WS_SERVER_URL) 
+print(f" Connected to WebSocket server at {WS_SERVER_URL}")
 print("Connected to WebSocket server")
 
 ws.send(json.dumps({

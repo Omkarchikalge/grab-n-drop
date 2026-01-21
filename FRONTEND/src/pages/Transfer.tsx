@@ -25,7 +25,7 @@ interface FileItem {
   status: 'idle' | 'selected' | 'transferring' | 'completed';
   progress: number;
 }
-
+const WS_SERVER_URL = "ws://10.73.235.70:3000";
 const roomId = "demo-room";
 const role = window.location.hash === "#sender" ? "sender" : "receiver";
 
@@ -234,8 +234,9 @@ export default function TransferPage() {
   // ================= WEBSOCKET + SIGNALING =================
   useEffect(() => {
     console.log("🎭 ROLE =", role);
-    
-const ws = new WebSocket('ws://localhost:3000');
+    console.log("🔌 Connecting to:", WS_SERVER_URL);
+
+  const ws = new WebSocket('WS_SERVER_URL');
     socketRef.current = ws;
 
     ws.onopen = async () => {
